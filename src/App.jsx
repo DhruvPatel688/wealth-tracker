@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   BarChart3,
   Bell,
+  Calculator,
   CalendarDays,
   CreditCard,
   DollarSign,
@@ -32,6 +33,7 @@ import { defaultState, emptyDebt, emptyDebtTransaction, emptyEtf, emptyFund, emp
 import { DashboardView, FundsView } from "@/views/DashboardView";
 import { DebtView } from "@/views/DebtView";
 import { EtfView } from "@/views/EtfView";
+import { PlanningView } from "@/views/PlanningView";
 import { ProjectionView } from "@/views/ProjectionView";
 import { RealWealthView } from "@/views/RealWealthView";
 import { SettingsView } from "@/views/SettingsView";
@@ -42,6 +44,15 @@ import { clampNumber, currency, daysSince, monthKey, signedCurrency, todayISO } 
 import { getMonthlyContribution } from "@/utils/ira";
 import { projectAssetsWithLinkedPortfolios, projectDebt } from "@/utils/projections";
 import { getEffectiveFundValue, isPortfolioFund } from "@/utils/portfolio";
+
+function normalizeSettings(settings = {}) {
+  return {
+    ...defaultState.settings,
+    ...settings,
+    futureGoal: { ...defaultState.settings.futureGoal, ...(settings.futureGoal || {}) },
+    planningGoal: { ...defaultState.settings.planningGoal, ...(settings.planningGoal || {}) },
+  };
+}
 
 function App() {
   const [data, setData] = useState(defaultState);
@@ -100,7 +111,7 @@ function App() {
             etfs: normalizedEtfs,
             debts: parsed.debts || [],
             debtTransactions: parsed.debtTransactions || [],
-            settings: { ...defaultState.settings, ...parsed.settings },
+            settings: normalizeSettings(parsed.settings),
           });
         }
       } catch (error) {
@@ -157,7 +168,7 @@ function App() {
     const currentMonth = monthKey();
     return effectiveFunds.map((fund) => {
       const actual = transactions.filter((tx) => tx.fundId === fund.id && tx.type === "contribution" && monthKey(tx.date) === currentMonth).reduce((sum, tx) => sum + clampNumber(tx.amount), 0);
-      return { name: fund.name.length > 14 ? `${fund.name.slice(0, 14)}...` : fund.name, Planned: clampNumber(fund.monthlyContribution), Actual: actual };
+      return { id: fund.id, name: fund.name.length > 14 ? `${fund.name.slice(0, 14)}...` : fund.name, Planned: clampNumber(fund.monthlyContribution), Actual: actual };
     });
   }, [effectiveFunds, transactions]);
 
@@ -466,7 +477,7 @@ function App() {
         if (!parsed?.funds) throw new Error("Invalid data");
         const normalizedFunds = parsed.funds.map((fund) => ({ annualReturn: 7, contributionMode: fund.category === "roth" ? fund.contributionMode || "manual" : "manual", iraCatchUp: Boolean(fund.iraCatchUp), ...fund }));
         const firstPortfolioFundId = normalizedFunds.find((fund) => isPortfolioFund(fund))?.id || "";
-        setData({ ...defaultState, ...parsed, funds: normalizedFunds, etfs: (parsed.etfs || []).map((etf) => ({ ...etf, fundId: etf.fundId || firstPortfolioFundId })), debts: parsed.debts || [], debtTransactions: parsed.debtTransactions || [], settings: { ...defaultState.settings, ...parsed.settings } });
+        setData({ ...defaultState, ...parsed, funds: normalizedFunds, etfs: (parsed.etfs || []).map((etf) => ({ ...etf, fundId: etf.fundId || firstPortfolioFundId })), debts: parsed.debts || [], debtTransactions: parsed.debtTransactions || [], settings: normalizeSettings(parsed.settings) });
       } catch {
         alert("Could not import file. Make sure it is a valid tracker JSON export.");
       }
@@ -508,22 +519,34 @@ function App() {
 
         {backupDue && <div className="mt-4 rounded-3xl border border-amber-300/20 bg-amber-300/10 p-4 text-amber-100"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><Bell className="h-5 w-5" /><p className="text-sm">Backup reminder: export your JSON backup. You can edit the reminder frequency in Settings.</p></div><Button onClick={exportData} className="rounded-2xl bg-amber-300 text-slate-950 hover:bg-amber-200">Export backup</Button></div></div>}
 
-        <nav className="mt-6 flex flex-wrap gap-2 rounded-3xl border border-white/10 bg-white/[0.04] p-2 backdrop-blur">
+        <nav className="mt-6 grid gap-3 rounded-3xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur">
           {[
-            ["dashboard", "Dashboard", BarChart3],
-            ["funds", "Funds", Wallet],
-            ["debt", "Debt", CreditCard],
-            ["visuals", "Visuals", Eye],
-            ["transactions", "Transactions", History],
-            ["snapshots", "Snapshots", CalendarDays],
-            ["etfs", "Portfolios", PieChartIcon],
-            ["projections", "Projections", LineChartIcon],
-            ["realWealth", "Real Wealth", TrendingUpIcon],
-            ["settings", "Settings", Save],
-          ].map(([key, label, Icon]) => <button key={key} onClick={() => setActiveView(key)} className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm transition ${activeView === key ? "bg-emerald-400 text-slate-950" : "text-slate-300 hover:bg-white/10 hover:text-white"}`}><Icon className="h-4 w-4" />{label}</button>)}
+            {
+              label: "Current Tracking",
+              items: [
+                ["dashboard", "Dashboard", BarChart3],
+                ["funds", "Funds", Wallet],
+                ["debt", "Debt", CreditCard],
+                ["transactions", "Transactions", History],
+                ["snapshots", "Snapshots", CalendarDays],
+                ["etfs", "Portfolios", PieChartIcon],
+                ["visuals", "Visuals", Eye],
+                ["settings", "Settings", Save],
+              ],
+            },
+            {
+              label: "Future Planning",
+              items: [
+                ["planning", "Planning", Calculator],
+                ["projections", "Projections", LineChartIcon],
+                ["realWealth", "Real Wealth", TrendingUpIcon],
+              ],
+            },
+          ].map((group) => <div key={group.label} className="grid gap-2 lg:grid-cols-[150px_1fr] lg:items-center"><p className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{group.label}</p><div className="flex flex-wrap gap-2">{group.items.map(([key, label, Icon]) => <button key={key} onClick={() => setActiveView(key)} className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm transition ${activeView === key ? "bg-emerald-400 text-slate-950" : "text-slate-300 hover:bg-white/10 hover:text-white"}`}><Icon className="h-4 w-4" />{label}</button>)}</div></div>)}
         </nav>
 
-        {activeView === "dashboard" && <DashboardView assetTotals={assetTotals} debtTotals={debtTotals} netWorth={netWorth} debtToAssets={debtToAssets} milestoneData={milestoneData} projectionData={projectionData} setActiveView={setActiveView} backupDue={backupDue} onExportData={exportData} onSaveSnapshot={saveSnapshot} />}
+        {activeView === "dashboard" && <DashboardView funds={effectiveFunds} monthlyData={currentMonthContributionData} assetTotals={assetTotals} debtTotals={debtTotals} netWorth={netWorth} debtToAssets={debtToAssets} milestoneData={milestoneData} projectionData={projectionData} settings={settings} setData={setData} setActiveView={setActiveView} backupDue={backupDue} onExportData={exportData} onSaveSnapshot={saveSnapshot} />}
+        {activeView === "planning" && <PlanningView funds={effectiveFunds} settings={settings} setData={setData} projectionData={projectionData} netWorth={netWorth} />}
         {activeView === "funds" && <FundsView funds={filteredFunds} allEtfs={etfs} query={query} setQuery={setQuery} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} setEditingFund={setEditingFund} deleteFund={deleteFund} quickContribution={quickContribution} openPortfolioForFund={openPortfolioForFund} />}
         {activeView === "debt" && <DebtView debts={debts} debtTransactions={debtTransactions} debtTotals={debtTotals} debtToAssets={debtToAssets} isAddDebtOpen={isAddDebtOpen} setIsAddDebtOpen={setIsAddDebtOpen} newDebt={newDebt} setNewDebt={setNewDebt} addDebt={addDebt} setEditingDebt={setEditingDebt} deleteDebt={deleteDebt} quickDebtPayment={quickDebtPayment} isDebtPaymentOpen={isDebtPaymentOpen} setIsDebtPaymentOpen={setIsDebtPaymentOpen} newDebtTransaction={newDebtTransaction} setNewDebtTransaction={setNewDebtTransaction} addDebtPayment={addDebtPayment} />}
         {activeView === "visuals" && <VisualsView assetTotals={assetTotals} debtTotals={debtTotals} netWorth={netWorth} debtToAssets={debtToAssets} fundProgressData={fundProgressData} allocationData={allocationData} debtAllocationData={debtAllocationData} currentMonthContributionData={currentMonthContributionData} netWorthData={netWorthData} />}

@@ -85,6 +85,14 @@ export function makeFreshDefaultState() {
       inflationRate: 3,
       baseYear: new Date().getFullYear(),
       projectIraLimitGrowth: false,
+      futureGoal: {
+        targetDate: `${new Date().getFullYear() + 20}-01-01`,
+      },
+      planningGoal: {
+        targetAmount: 3000000,
+        targetMode: "real",
+        targetDate: `${new Date().getFullYear() + 20}-01-01`,
+      },
     },
   };
 }
