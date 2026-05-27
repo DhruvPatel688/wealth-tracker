@@ -1,0 +1,19 @@
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { chartColors, tooltipStyle } from "@/constants";
+import { currency } from "@/utils/format";
+
+export function BarViz({ data, first, second, third }) {
+  return <div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 55 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" /><XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} angle={-20} textAnchor="end" interval={0} height={60} /><YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} tickFormatter={(v) => `$${Math.round(v / 1000)}k`} /><Tooltip formatter={(value) => currency(value)} contentStyle={tooltipStyle} /><Legend verticalAlign="bottom" height={36} /><Bar dataKey={first} radius={[8, 8, 0, 0]} fill="rgba(148,163,184,0.35)" /><Bar dataKey={second} radius={[8, 8, 0, 0]} fill="#34d399" />{third && <Bar dataKey={third} radius={[8, 8, 0, 0]} fill="#38bdf8" />}</BarChart></ResponsiveContainer></div>;
+}
+
+export function PieViz({ data }) {
+  return <div className="h-64"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={4} dataKey="value">{data.map((entry, index) => <Cell key={entry.name || index} fill={chartColors[index % chartColors.length]} />)}</Pie><Tooltip formatter={(value) => currency(value)} contentStyle={tooltipStyle} /></PieChart></ResponsiveContainer></div>;
+}
+
+export function MultiMetricLineViz({ data, keys, xKey = "year" }) {
+  return <div className="h-80"><ResponsiveContainer width="100%" height="100%"><LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" /><XAxis dataKey={xKey} tick={{ fill: "#94a3b8", fontSize: 12 }} /><YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} tickFormatter={(v) => `$${Math.round(v / 1000)}k`} /><Tooltip formatter={(value) => currency(value)} contentStyle={tooltipStyle} /><Legend />{keys.map((key, index) => <Line key={key} type="monotone" dataKey={key} stroke={chartColors[index % chartColors.length]} strokeWidth={key.includes("Net") || key.includes("Portfolio") ? 4 : 2.5} dot={false} />)}</LineChart></ResponsiveContainer></div>;
+}
+
+export function MultiLineViz({ data, funds }) {
+  return <div className="h-[430px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={data} margin={{ top: 20, right: 30, left: 10, bottom: 70 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" /><XAxis dataKey="year" tick={{ fill: "#94a3b8", fontSize: 12 }} interval="preserveStartEnd" height={55} /><YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} tickFormatter={(v) => `$${Math.round(v / 1000)}k`} /><Tooltip formatter={(value) => currency(value)} contentStyle={{ ...tooltipStyle, maxHeight: "260px", overflowY: "auto", maxWidth: "280px" }} /><Legend verticalAlign="bottom" align="center" height={48} wrapperStyle={{ paddingTop: "18px", fontSize: "12px" }} /><Line type="monotone" dataKey="ProjectedNetWorth" name="Projected Net Worth" stroke="#34d399" strokeWidth={4} dot={false} activeDot={{ r: 5 }} /><Line type="monotone" dataKey="ProjectedAssets" name="Projected Assets" stroke="#38bdf8" strokeWidth={3} dot={false} /><Line type="monotone" dataKey="ProjectedDebt" name="Projected Debt" stroke="#fb7185" strokeWidth={3} dot={false} />{funds.map((fund, index) => <Line key={fund.id} type="monotone" dataKey={fund.name} stroke={chartColors[(index + 3) % chartColors.length]} strokeWidth={1.5} dot={false} legendType="none" />)}</LineChart></ResponsiveContainer></div>;
+}
