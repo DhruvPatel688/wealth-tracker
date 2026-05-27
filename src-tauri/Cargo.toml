@@ -1,0 +1,16 @@
+[package]
+name = "wealth-tracker"
+version = "0.0.0"
+description = "A local-first wealth tracking desktop app."
+authors = ["Dhruv Patel"]
+edition = "2021"
+
+[lib]
+name = "wealth_tracker_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
