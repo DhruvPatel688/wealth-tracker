@@ -1,12 +1,13 @@
 import { clampNumber } from "@/utils/format";
+import { getMonthlyContribution } from "@/utils/ira";
 import { getFundPortfolioValue, isPortfolioFund } from "@/utils/portfolio";
 
-export function projectNormalFunds(funds, years) {
+export function projectNormalFunds(funds, years, settings = {}) {
   const fundBalances = funds.map((fund) => ({
     id: fund.id,
     name: fund.name,
+    fund,
     balance: clampNumber(fund.current),
-    monthlyContribution: clampNumber(fund.monthlyContribution),
     monthlyRate: Math.pow(1 + clampNumber(fund.annualReturn) / 100, 1 / 12) - 1,
   }));
   const rows = [];
@@ -14,7 +15,7 @@ export function projectNormalFunds(funds, years) {
   for (let month = 0; month <= totalMonths; month++) {
     if (month > 0) {
       fundBalances.forEach((fund) => {
-        fund.balance = fund.balance * (1 + fund.monthlyRate) + fund.monthlyContribution;
+        fund.balance = fund.balance * (1 + fund.monthlyRate) + getMonthlyContribution(fund.fund, settings, month);
       });
     }
     const yearElapsed = month / 12;
@@ -52,15 +53,15 @@ export function projectDebt(debts, years) {
   return rows;
 }
 
-export function projectAssetsWithLinkedPortfolios(funds, etfs, years) {
+export function projectAssetsWithLinkedPortfolios(funds, etfs, years, settings = {}) {
   const totalMonths = Math.max(12, Math.round(years * 12));
   const normalFundModels = funds
     .filter((fund) => !isPortfolioFund(fund) || getFundPortfolioValue(fund.id, etfs) === 0)
     .map((fund) => ({
       id: fund.id,
       name: fund.name,
+      fund,
       balance: clampNumber(fund.current),
-      monthlyContribution: clampNumber(fund.monthlyContribution),
       monthlyRate: Math.pow(1 + clampNumber(fund.annualReturn) / 100, 1 / 12) - 1,
     }));
 
@@ -81,8 +82,7 @@ export function projectAssetsWithLinkedPortfolios(funds, etfs, years) {
       const equalWeight = holdings.length > 0 ? 1 / holdings.length : 0;
   
       return {
-        id: fund.id,
-        name: fund.name,
+        ...fund,
         holdings: holdings.map((etf) => {
           const allocationWeight = hasValidTargets
             ? clampNumber(etf.targetPercent) / targetTotal
@@ -91,8 +91,7 @@ export function projectAssetsWithLinkedPortfolios(funds, etfs, years) {
           return {
             ticker: etf.ticker,
             balance: clampNumber(etf.currentValue),
-            monthlyContribution:
-              clampNumber(fund.monthlyContribution) * allocationWeight,
+            allocationWeight,
             monthlyRate:
               Math.pow(1 + clampNumber(etf.annualReturn) / 100, 1 / 12) - 1,
           };
@@ -104,11 +103,12 @@ export function projectAssetsWithLinkedPortfolios(funds, etfs, years) {
   for (let month = 0; month <= totalMonths; month++) {
     if (month > 0) {
       normalFundModels.forEach((fund) => {
-        fund.balance = fund.balance * (1 + fund.monthlyRate) + fund.monthlyContribution;
+        fund.balance = fund.balance * (1 + fund.monthlyRate) + getMonthlyContribution(fund.fund, settings, month);
       });
       portfolioModels.forEach((portfolio) => {
+        const monthlyContribution = getMonthlyContribution(portfolio, settings, month);
         portfolio.holdings.forEach((holding) => {
-          holding.balance = holding.balance * (1 + holding.monthlyRate) + holding.monthlyContribution;
+          holding.balance = holding.balance * (1 + holding.monthlyRate) + monthlyContribution * holding.allocationWeight;
         });
       });
     }

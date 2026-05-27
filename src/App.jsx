@@ -38,6 +38,7 @@ import { SnapshotsView } from "@/views/SnapshotsView";
 import { TransactionsView } from "@/views/TransactionsView";
 import { VisualsView } from "@/views/VisualsView";
 import { clampNumber, currency, daysSince, monthKey, signedCurrency, todayISO } from "@/utils/format";
+import { getMonthlyContribution } from "@/utils/ira";
 import { projectAssetsWithLinkedPortfolios, projectDebt } from "@/utils/projections";
 import { getEffectiveFundValue, isPortfolioFund } from "@/utils/portfolio";
 
@@ -68,8 +69,8 @@ function App() {
   const activePortfolioFund = portfolioFunds.find((fund) => fund.id === activePortfolioFundId) || null;
 
   const effectiveFunds = useMemo(() => {
-    return funds.map((fund) => ({ ...fund, current: getEffectiveFundValue(fund, etfs) }));
-  }, [funds, etfs]);
+    return funds.map((fund) => ({ ...fund, current: getEffectiveFundValue(fund, etfs), monthlyContribution: getMonthlyContribution(fund, settings) }));
+  }, [funds, etfs, settings]);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -77,7 +78,7 @@ function App() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed?.funds) {
-          const normalizedFunds = parsed.funds.map((fund) => ({ annualReturn: 7, ...fund }));
+          const normalizedFunds = parsed.funds.map((fund) => ({ annualReturn: 7, contributionMode: fund.category === "roth" ? fund.contributionMode || "manual" : "manual", iraCatchUp: Boolean(fund.iraCatchUp), ...fund }));
           const firstPortfolioFundId = normalizedFunds.find((fund) => isPortfolioFund(fund))?.id || "";
           const normalizedEtfs = (parsed.etfs || defaultState.etfs).map((etf) => ({
             shares: 0,
@@ -167,25 +168,25 @@ function App() {
 
   const projectionData = useMemo(() => {
     const years = Math.max(1, clampNumber(settings.projectionYears));
-    const fundRows = projectAssetsWithLinkedPortfolios(funds, etfs, years);
+    const fundRows = projectAssetsWithLinkedPortfolios(funds, etfs, years, settings);
     const debtRows = projectDebt(debts, years);
     return fundRows.map((row, index) => {
       const debt = debtRows[index]?.ProjectedDebt || 0;
       return { ...row, ProjectedDebt: debt, ProjectedNetWorth: row.ProjectedAssets - debt };
     });
-  }, [funds, etfs, debts, settings.projectionYears]);
+  }, [funds, etfs, debts, settings]);
 
   const milestoneData = useMemo(() => {
     const milestones = [10000, 25000, 50000, 100000, 250000, 500000, 1000000];
     return milestones.map((target) => {
       const years = 50;
-      const fundRows = projectAssetsWithLinkedPortfolios(funds, etfs, years);
+      const fundRows = projectAssetsWithLinkedPortfolios(funds, etfs, years, settings);
       const debtRows = projectDebt(debts, years);
       const rows = fundRows.map((row, i) => ({ monthApprox: row.month, netWorth: row.ProjectedAssets - (debtRows[i]?.ProjectedDebt || 0) }));
       const hit = rows.find((row) => row.netWorth >= target);
       return { target, months: hit ? hit.monthApprox : Infinity };
     });
-  }, [funds, etfs, debts]);
+  }, [funds, etfs, debts, settings]);
 
   const stockProjectionData = useMemo(() => {
     const years = Math.max(1, clampNumber(settings.projectionYears));
@@ -199,10 +200,6 @@ function App() {
     if (portfolioEtfs.length === 0) return [];
   
     const parentFund = funds.find((fund) => fund.id === activePortfolioFundId);
-  
-    const monthlyStockContribution = clampNumber(
-      parentFund?.monthlyContribution
-    );
   
     const targetTotal = portfolioEtfs.reduce(
       (sum, etf) => sum + clampNumber(etf.targetPercent),
@@ -220,7 +217,7 @@ function App() {
       return {
         ticker: etf.ticker,
         balance: clampNumber(etf.currentValue),
-        monthlyContribution: monthlyStockContribution * allocationWeight,
+        allocationWeight,
         monthlyRate:
           Math.pow(1 + clampNumber(etf.annualReturn) / 100, 1 / 12) - 1,
       };
@@ -229,11 +226,12 @@ function App() {
     const rows = [];
     const totalMonths = Math.max(12, Math.round(years * 12));
   
-    for (let month = 0; month <= totalMonths; month++) {
-      if (month > 0) {
+  for (let month = 0; month <= totalMonths; month++) {
+    if (month > 0) {
+        const monthlyStockContribution = getMonthlyContribution(parentFund, settings, month);
         balances.forEach((etf) => {
           etf.balance =
-            etf.balance * (1 + etf.monthlyRate) + etf.monthlyContribution;
+            etf.balance * (1 + etf.monthlyRate) + monthlyStockContribution * etf.allocationWeight;
         });
       }
   
@@ -256,7 +254,7 @@ function App() {
     }
   
     return rows;
-  }, [etfs, funds, activePortfolioFundId, settings.projectionYears]);
+  }, [etfs, funds, activePortfolioFundId, settings]);
   const realWealthData = useMemo(() => {
     return projectionData.map((row) => {
       const yearElapsed = Number(String(row.year).replace("Y", "")) || 0;
@@ -342,7 +340,7 @@ function App() {
   };
 
   const quickContribution = (fund) => {
-    const amount = clampNumber(fund.monthlyContribution);
+    const amount = getMonthlyContribution(fund, settings);
     if (!amount) return;
     const parentFund = funds.find((item) => item.id === fund.id) || fund;
     const portfolioEtfs = etfs.filter((etf) => etf.fundId === fund.id);
@@ -465,7 +463,7 @@ function App() {
       try {
         const parsed = JSON.parse(String(reader.result));
         if (!parsed?.funds) throw new Error("Invalid data");
-        const normalizedFunds = parsed.funds.map((fund) => ({ annualReturn: 7, ...fund }));
+        const normalizedFunds = parsed.funds.map((fund) => ({ annualReturn: 7, contributionMode: fund.category === "roth" ? fund.contributionMode || "manual" : "manual", iraCatchUp: Boolean(fund.iraCatchUp), ...fund }));
         const firstPortfolioFundId = normalizedFunds.find((fund) => isPortfolioFund(fund))?.id || "";
         setData({ ...defaultState, ...parsed, funds: normalizedFunds, etfs: (parsed.etfs || []).map((etf) => ({ ...etf, fundId: etf.fundId || firstPortfolioFundId })), debts: parsed.debts || [], debtTransactions: parsed.debtTransactions || [], settings: { ...defaultState.settings, ...parsed.settings } });
       } catch {

@@ -1,7 +1,8 @@
 import { todayISO, clampNumber } from "@/utils/format";
+import { getMonthlyContribution } from "@/utils/ira";
 
 export function emptyFund() {
-  return { name: "", category: "custom", current: "", target: "", monthlyContribution: "", annualReturn: "7", notes: "" };
+  return { name: "", category: "custom", current: "", target: "", monthlyContribution: "", contributionMode: "manual", iraCatchUp: false, annualReturn: "7", notes: "" };
 }
 
 export function emptyDebt() {
@@ -21,14 +22,21 @@ export function emptyEtf() {
 }
 
 export function sanitizeFund(fund) {
-  return {
+  const contributionMode = fund.category === "roth" ? fund.contributionMode || "manual" : "manual";
+  const normalized = {
     ...fund,
-    name: fund.name.trim(),
-    current: clampNumber(fund.current),
-    target: clampNumber(fund.target),
-    monthlyContribution: clampNumber(fund.monthlyContribution),
-    annualReturn: clampNumber(fund.annualReturn),
-    notes: fund.notes?.trim() || "",
+    contributionMode,
+    iraCatchUp: fund.category === "roth" ? Boolean(fund.iraCatchUp) : false,
+  };
+
+  return {
+    ...normalized,
+    name: normalized.name.trim(),
+    current: clampNumber(normalized.current),
+    target: clampNumber(normalized.target),
+    monthlyContribution: contributionMode === "iraMax" ? getMonthlyContribution(normalized) : clampNumber(normalized.monthlyContribution),
+    annualReturn: clampNumber(normalized.annualReturn),
+    notes: normalized.notes?.trim() || "",
   };
 }
 
@@ -52,8 +60,8 @@ export function makeFreshDefaultState() {
   const rothId = crypto.randomUUID();
   return {
     funds: [
-      { id: taxableId, name: "Taxable Brokerage", category: "brokerage", current: 0, target: 25000, monthlyContribution: 500, annualReturn: 9, notes: "Taxable ETF portfolio. Click View Portfolio to manage holdings." },
-      { id: rothId, name: "Roth IRA", category: "roth", current: 0, target: 100000, monthlyContribution: 625, annualReturn: 8, notes: "Tax-advantaged ETF portfolio. Click View Portfolio to manage holdings." },
+      { id: taxableId, name: "Taxable Brokerage", category: "brokerage", current: 0, target: 25000, monthlyContribution: 500, contributionMode: "manual", iraCatchUp: false, annualReturn: 9, notes: "Taxable ETF portfolio. Click View Portfolio to manage holdings." },
+      { id: rothId, name: "Roth IRA", category: "roth", current: 0, target: 100000, monthlyContribution: 625, contributionMode: "iraMax", iraCatchUp: false, annualReturn: 8, notes: "Tax-advantaged ETF portfolio. Click View Portfolio to manage holdings." },
       { id: crypto.randomUUID(), name: "Savings Account", category: "savings", current: 0, target: 10000, monthlyContribution: 250, annualReturn: 4, notes: "Emergency fund / cash stability." },
       { id: crypto.randomUUID(), name: "Real Estate Fund", category: "realEstate", current: 0, target: 50000, monthlyContribution: 300, annualReturn: 6, notes: "Future down payment, closing costs, or property opportunity fund." },
       { id: crypto.randomUUID(), name: "Business Acquisition Fund", category: "business", current: 0, target: 100000, monthlyContribution: 400, annualReturn: 7, notes: "Long-term fund for buying or investing in a cash-flowing business." },
@@ -76,6 +84,7 @@ export function makeFreshDefaultState() {
       finnhubApiKey: "",
       inflationRate: 3,
       baseYear: new Date().getFullYear(),
+      projectIraLimitGrowth: false,
     },
   };
 }

@@ -21,3 +21,7 @@ export const debtTypeLabels = {
 
 export const chartColors = ["#34d399", "#38bdf8", "#a78bfa", "#fbbf24", "#fb7185", "#22c55e", "#60a5fa", "#f97316"];
 export const tooltipStyle = { background: "#020617", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "16px", color: "#f8fafc" };
+
+export const IRA_LIMIT_YEAR = 2026;
+export const IRA_ANNUAL_LIMIT = 7500;
+export const IRA_CATCH_UP_ANNUAL_LIMIT = 8600;
