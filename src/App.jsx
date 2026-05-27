@@ -14,6 +14,7 @@ import {
   Save,
   Scale,
   TrendingUpIcon,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,7 +29,7 @@ import { Hero } from "@/components/Hero";
 import { StatCard } from "@/components/common";
 import { DebtForm, FundForm } from "@/components/forms";
 import { defaultState, emptyDebt, emptyDebtTransaction, emptyEtf, emptyFund, emptyTransaction, makeFreshDefaultState, sanitizeDebt, sanitizeFund } from "@/data/defaultState";
-import { DashboardView } from "@/views/DashboardView";
+import { DashboardView, FundsView } from "@/views/DashboardView";
 import { DebtView } from "@/views/DebtView";
 import { EtfView } from "@/views/EtfView";
 import { ProjectionView } from "@/views/ProjectionView";
@@ -510,6 +511,7 @@ function App() {
         <nav className="mt-6 flex flex-wrap gap-2 rounded-3xl border border-white/10 bg-white/[0.04] p-2 backdrop-blur">
           {[
             ["dashboard", "Dashboard", BarChart3],
+            ["funds", "Funds", Wallet],
             ["debt", "Debt", CreditCard],
             ["visuals", "Visuals", Eye],
             ["transactions", "Transactions", History],
@@ -521,7 +523,8 @@ function App() {
           ].map(([key, label, Icon]) => <button key={key} onClick={() => setActiveView(key)} className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm transition ${activeView === key ? "bg-emerald-400 text-slate-950" : "text-slate-300 hover:bg-white/10 hover:text-white"}`}><Icon className="h-4 w-4" />{label}</button>)}
         </nav>
 
-        {activeView === "dashboard" && <DashboardView funds={filteredFunds} allEtfs={etfs} query={query} setQuery={setQuery} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} setEditingFund={setEditingFund} deleteFund={deleteFund} quickContribution={quickContribution} openPortfolioForFund={openPortfolioForFund} />}
+        {activeView === "dashboard" && <DashboardView assetTotals={assetTotals} debtTotals={debtTotals} netWorth={netWorth} debtToAssets={debtToAssets} milestoneData={milestoneData} projectionData={projectionData} setActiveView={setActiveView} backupDue={backupDue} onExportData={exportData} onSaveSnapshot={saveSnapshot} />}
+        {activeView === "funds" && <FundsView funds={filteredFunds} allEtfs={etfs} query={query} setQuery={setQuery} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} setEditingFund={setEditingFund} deleteFund={deleteFund} quickContribution={quickContribution} openPortfolioForFund={openPortfolioForFund} />}
         {activeView === "debt" && <DebtView debts={debts} debtTransactions={debtTransactions} debtTotals={debtTotals} debtToAssets={debtToAssets} isAddDebtOpen={isAddDebtOpen} setIsAddDebtOpen={setIsAddDebtOpen} newDebt={newDebt} setNewDebt={setNewDebt} addDebt={addDebt} setEditingDebt={setEditingDebt} deleteDebt={deleteDebt} quickDebtPayment={quickDebtPayment} isDebtPaymentOpen={isDebtPaymentOpen} setIsDebtPaymentOpen={setIsDebtPaymentOpen} newDebtTransaction={newDebtTransaction} setNewDebtTransaction={setNewDebtTransaction} addDebtPayment={addDebtPayment} />}
         {activeView === "visuals" && <VisualsView assetTotals={assetTotals} debtTotals={debtTotals} netWorth={netWorth} debtToAssets={debtToAssets} fundProgressData={fundProgressData} allocationData={allocationData} debtAllocationData={debtAllocationData} currentMonthContributionData={currentMonthContributionData} netWorthData={netWorthData} />}
         {activeView === "transactions" && <TransactionsView transactions={transactions} funds={effectiveFunds} monthlyData={currentMonthContributionData} />}
