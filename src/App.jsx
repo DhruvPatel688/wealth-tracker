@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -54,6 +55,43 @@ function normalizeSettings(settings = {}) {
   };
 }
 
+function isDesktopApp() {
+  return isTauri();
+}
+
+function normalizeTrackerData(parsed) {
+  if (!parsed?.funds) return null;
+
+  const normalizedFunds = parsed.funds.map((fund) => ({
+    annualReturn: 7,
+    contributionMode: fund.category === "roth" ? fund.contributionMode || "manual" : "manual",
+    iraCatchUp: Boolean(fund.iraCatchUp),
+    ...fund,
+  }));
+  const firstPortfolioFundId = normalizedFunds.find((fund) => isPortfolioFund(fund))?.id || "";
+  const normalizedEtfs = (parsed.etfs || defaultState.etfs).map((etf) => ({
+    shares: 0,
+    livePrice: 0,
+    previousClose: 0,
+    dailyChange: 0,
+    dailyChangePercent: 0,
+    annualReturn: 8,
+    lastUpdated: null,
+    ...etf,
+    fundId: etf.fundId || firstPortfolioFundId,
+  }));
+
+  return {
+    ...defaultState,
+    ...parsed,
+    funds: normalizedFunds,
+    etfs: normalizedEtfs,
+    debts: parsed.debts || [],
+    debtTransactions: parsed.debtTransactions || [],
+    settings: normalizeSettings(parsed.settings),
+  };
+}
+
 function App() {
   const [data, setData] = useState(defaultState);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -85,45 +123,57 @@ function App() {
   }, [funds, etfs, settings]);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+    let isMounted = true;
+
+    async function loadSavedData() {
       try {
-        const parsed = JSON.parse(saved);
-        if (parsed?.funds) {
-          const normalizedFunds = parsed.funds.map((fund) => ({ annualReturn: 7, contributionMode: fund.category === "roth" ? fund.contributionMode || "manual" : "manual", iraCatchUp: Boolean(fund.iraCatchUp), ...fund }));
-          const firstPortfolioFundId = normalizedFunds.find((fund) => isPortfolioFund(fund))?.id || "";
-          const normalizedEtfs = (parsed.etfs || defaultState.etfs).map((etf) => ({
-            shares: 0,
-            livePrice: 0,
-            previousClose: 0,
-            dailyChange: 0,
-            dailyChangePercent: 0,
-            annualReturn: 8,
-            lastUpdated: null,
-            ...etf,
-            fundId: etf.fundId || firstPortfolioFundId,
-          }));
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setData({
-            ...defaultState,
-            ...parsed,
-            funds: normalizedFunds,
-            etfs: normalizedEtfs,
-            debts: parsed.debts || [],
-            debtTransactions: parsed.debtTransactions || [],
-            settings: normalizeSettings(parsed.settings),
-          });
+        if (isDesktopApp()) {
+          const desktopData = await invoke("load_app_data");
+          if (desktopData) {
+            const normalized = normalizeTrackerData(JSON.parse(desktopData));
+            if (normalized && isMounted) {
+              setData(normalized);
+            }
+          } else {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            const normalized = saved ? normalizeTrackerData(JSON.parse(saved)) : null;
+            if (normalized && isMounted) {
+              setData(normalized);
+            }
+          }
+        } else {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          const normalized = saved ? normalizeTrackerData(JSON.parse(saved)) : null;
+          if (normalized && isMounted) {
+            setData(normalized);
+          }
         }
       } catch (error) {
-        console.error("Failed to load local tracker data", error);
+        console.error("Failed to load tracker data", error);
+      } finally {
+        if (isMounted) {
+          setHasLoaded(true);
+        }
       }
     }
-    setHasLoaded(true);
+
+    loadSavedData();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
     if (!hasLoaded) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const serialized = JSON.stringify(data);
+    if (isDesktopApp()) {
+      invoke("save_app_data", { data: serialized }).catch((error) => {
+        console.error("Failed to save desktop tracker data", error);
+        localStorage.setItem(STORAGE_KEY, serialized);
+      });
+      return;
+    }
+    localStorage.setItem(STORAGE_KEY, serialized);
   }, [data, hasLoaded]);
 
   const openPortfolioForFund = (fundId) => {
@@ -474,10 +524,9 @@ function App() {
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result));
-        if (!parsed?.funds) throw new Error("Invalid data");
-        const normalizedFunds = parsed.funds.map((fund) => ({ annualReturn: 7, contributionMode: fund.category === "roth" ? fund.contributionMode || "manual" : "manual", iraCatchUp: Boolean(fund.iraCatchUp), ...fund }));
-        const firstPortfolioFundId = normalizedFunds.find((fund) => isPortfolioFund(fund))?.id || "";
-        setData({ ...defaultState, ...parsed, funds: normalizedFunds, etfs: (parsed.etfs || []).map((etf) => ({ ...etf, fundId: etf.fundId || firstPortfolioFundId })), debts: parsed.debts || [], debtTransactions: parsed.debtTransactions || [], settings: normalizeSettings(parsed.settings) });
+        const normalized = normalizeTrackerData(parsed);
+        if (!normalized) throw new Error("Invalid data");
+        setData(normalized);
       } catch {
         alert("Could not import file. Make sure it is a valid tracker JSON export.");
       }

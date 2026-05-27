@@ -3827,6 +3827,7 @@ dependencies = [
 name = "wealth-tracker"
 version = "0.0.0"
 dependencies = [
+ "serde_json",
  "tauri",
  "tauri-build",
 ]
